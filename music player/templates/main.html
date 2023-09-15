@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html>
+    <head>
+        <link rel="stylesheet" href="{{url_for('static', filename='style.css')}}">
+        <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.6.1/jquery.min.js"></script>
+        <script>
+            var allPlaylists = {{files|tojson}}
+            var json = {{json|tojson}}
+            var currentSong = null
+            var currentSongBms = []
+            var otherVersion = []
+            var playlist = null
+
+            var random = false
+
+            function displayPlaylists(){
+                div = document.createElement("div")
+                for(playlist in allPlaylists){
+                    button = document.createElement("button")
+                    button.value = playlist
+                    button.innerHTML = playlist
+                    button.addEventListener("click", function(){
+                        playlist = this.value
+                        list = document.getElementById("list")
+                        if(list){
+                            document.body.removeChild(list)
+                        }
+                        createList()
+                    })
+                    div.appendChild(button)
+                }
+                document.getElementById("playlistSelector").appendChild(div)
+            }
+
+            function updateTitle(){
+                if(currentSong){
+                    songName = currentSong.name.split(".")[0]
+                }
+                else{
+                    songName = "None"
+                }
+                document.title = "Playing " + songName
+            }
+
+            function toggleRandom(button){
+                if (button.id == 0){// false
+                    button.id = 1
+                    button.style.backgroundColor = "#4DFF00"
+                    random = true
+                }
+                else{
+                    button.id = 0
+                    button.style.backgroundColor = "red"
+                    random = false
+                }
+            }
+
+            function toggleLoop(audio){
+                loopButton = audio.parentElement.children[0].children[2]
+                if (audio.loop){
+                    audio.loop = false
+                    loopButton.style.backgroundColor = loopButtonUnLooped
+                }
+                else{
+                    audio.loop = true
+                    loopButton.style.backgroundColor = "#4DF932"
+                }
+            }
+
+            function getRandomElementFromList(list){
+                index = Math.floor(Math.random() * list.length)
+                if(index == 0){
+                    index = 1
+                }
+                return list[index]
+
+            }
+
+            function getRandomSong(audio){
+                songSelection = getRandomElementFromList(audio.parentElement.parentElement.children).children[1]
+                return songSelection
+            }
+
+            function togglePlay(audio){
+                if(audio.paused){
+                    audio.play()
+                }
+                else{
+                    audio.pause()
+                }
+            }
+
+            function tallyPlay(){
+            $.post(window.location.href,
+                    {
+                        id: "songCounter",
+                        song: currentSong.name,
+                        section: currentSong.parentElement.parentElement.firstChild.innerHTML, // i know i know but it works
+                        playlist: playlist
+                    }
+                )
+            }
+
+            function removeAllChildrenInElement(element){ // thanks geeksforgeeks
+                var child = element.lastElementChild
+                while(child){
+                    element.removeChild(child)
+                    child = element.lastElementChild
+                }
+            }
+
+            function load(){
+                displayPlaylists()
+                // fixPostTable()
+            }
+
+            function fixPostTable(){
+                postTable = document.getElementById("postTable")
+                trs = postTable.children[0].children
+                
+                for(tr of trs){
+                    trWidth = tr.offsetWidth
+                    tds = tr.children.length
+                    width = 100 / tds
+                
+                    tds = tr.children
+                    for(td of tds){
+                        td.width = (trWidth * (width/100))
+                    }
+                }
+            }
+
+            function onPlay(audio){ 
+                /* for some reason .pause() is called after EVERYTHING else in the functoin is done. this is so weird
+                 and this solution works but it's techincally calling it twice and i have no idea how to fix it. it 
+                 works so ill leave it but if there's anything weird going on, try this.
+                 */
+                if(currentSong){
+                    currentSong.pause()
+                    onPause(currentSong)
+                }
+                currentSong = audio
+                currentSongBms = json[currentSong.name]['bookmarks']
+
+                audio.parentElement.style.border = "5px solid black"
+                updateTitle()
+
+                tallyPlay()
+            }
+
+            function onPause(audio){
+                if(audio == currentSong){
+                    currentSong = null
+                    audio.parentElement.style.border = null
+                }
+                updateTitle()
+            }
+
+            function getNextSong(audio){
+                nextElement = audio.parentElement.nextElementSibling
+                if(nextElement){
+                    return nextElement.children[1]
+                }
+                else{
+                    return audio.parentElement.parentElement.children[1].children[1]
+                }
+            }
+
+            function addListOfSongsAsOptionsToSongSelectors(list){
+                songSelectors = document.getElementsByName("songSelector")
+                for (ss of songSelectors){
+                    removeAllChildrenInElement(ss)
+                    for (song of list){
+                        option = document.createElement("option")
+                        option.innerHTML = song
+                        ss.appendChild(option)
+                    }
+                }
+            }
+
+            function playNext(audio){
+                if(random){
+                    next = getRandomSong(audio)
+                    next.play()
+                }
+                else{
+                    next = getNextSong(audio)
+                    next.play()
+                }
+                
+            }
+            
+            function createList(){
+                files = allPlaylists[playlist]
+                div = document.createElement('div')
+                div.id = "list"
+
+                songSelectionList = []
+
+                delButtonNormalColor = "#FB8D8D"
+                loopButtonUnLooped = "#FF6E6E"
+                for(dir in files){
+                    let mp3s = files[dir]
+                    let section = document.createElement('div')
+                    let header = document.createElement('h1')
+
+                    header.innerHTML = dir
+                    section.style.border = "1px solid black"
+                    
+                    section.appendChild(header)
+
+                    for(mp3 of mp3s){
+                        let wrapper = document.createElement('div')
+                        let label = document.createElement('td')
+                        let audio = document.createElement('audio')
+                        let source = document.createElement('source')
+                        let src = `playlists/${playlist}/${dir}/${mp3}`
+
+                        let delButton = document.createElement("td")
+                        let loopButton = document.createElement("td")
+
+                        songButtons = [delButton, loopButton]
+
+                        let optionsTable = document.createElement("table")
+
+                        source.src = `{{url_for('static', filename='')}}` + src
+                        label.innerHTML = mp3.split(".")[0]
+                        wrapper.classList.add("selection")
+                        audio.controls = true
+                        audio.name = mp3
+                        songSelectionList.push(mp3)
+
+                        delButton.innerHTML = "X"
+                        delButton.style.backgroundColor = delButtonNormalColor
+                        
+                        loopButton.innerHTML = "Loop"
+                        loopButton.style.backgroundColor = loopButtonUnLooped
+
+                        optionsTable = optionsTable.createTBody()
+
+                        optionsTable.appendChild(label)
+                        optionsTable.appendChild(delButton)
+                        optionsTable.appendChild(loopButton)
+
+                        audio.addEventListener("play", function(){
+                            onPlay(audio)
+                        })
+
+                        audio.addEventListener("pause", function(){
+                            onPause(audio)
+                        })
+
+                        audio.addEventListener("ended", function(){
+                            playNext(audio)
+                        })
+
+                        delButton.addEventListener("mouseover", function(){
+                            this.style.backgroundColor = "#EE4B2B"
+                        })
+
+                        delButton.addEventListener("mouseout", function(){
+                            this.style.backgroundColor = delButtonNormalColor
+                        })
+
+                        delButton.addEventListener("mousedown", function(){
+                            if(event.button == 0){
+                                return
+                            }
+                            audio = this.parentElement.parentElement.children[1]
+                            $.post(window.location.href,
+                                {
+                                    id: "delSong",
+                                    song: audio.name,
+                                    section: audio.parentElement.parentElement.firstChild.innerHTML, // i know i know but it works
+                                    playlist: playlist,
+                                }
+                            )
+
+                            window.location = window.location.href
+                        })
+
+                        loopButton.addEventListener("mousedown", function(){
+                            if (event.button == 0){
+                                return
+                            }
+                            toggleLoop(audio)
+                        })
+
+                        for(button of songButtons){
+                            button.addEventListener("contextmenu", (event) => {
+                                event.preventDefault()
+                            })
+                        }
+
+                        audio.appendChild(source)
+                        wrapper.appendChild(optionsTable)
+                        wrapper.appendChild(audio)
+
+                        wrapper.onclick = function(){
+                            togglePlay(wrapper.children[1])
+                        }
+
+                        section.appendChild(wrapper)
+                    
+                    }
+                    div.appendChild(section)
+                }
+            
+                addListOfSongsAsOptionsToSongSelectors(songSelectionList)
+
+                document.body.appendChild(div)
+            }
+
+            document.addEventListener('keypress', (e) => {
+                if(!isNaN(e.key) && currentSongBms.length - 1 >= e.key - 1){
+                    currentSong.currentTime = currentSongBms[e.key - 1]
+                }
+                switch(e.key){
+                    case "*": // set time to 0
+                        if (currentSong){
+                            currentSong.currentTime = 0
+                            tallyPlay()
+                        }
+                        break;
+                    case "`": // add this to the instrumental tracker thing
+                        if(otherVersion.length < 2){
+                            if (currentSong){
+                                otherVersion.push(currentSong.name)
+                            }
+                        }
+                        if(otherVersion.length == 2){ // if it was 1 before this, now it'll be 2
+                            $.post(window.location.href,
+                                {
+                                    id: "otherVersion",
+                                    song1: otherVersion[0],
+                                    song2: otherVersion[1]
+                                }
+                            )
+                            otherVersion = []
+                        }
+                        
+                        break;
+                    case "+": // set time to basically the end
+                        if (currentSong){
+                            currentSong.currentTime = currentSong.duration
+                        }
+                        break;
+                    case "r": // toggleRandom
+                        toggleRandom(document.getElementsByName("randomButton")[0])
+                        break;
+                    case ".": // this will toggle a clip
+                        // problem: this isn't updating immediately and you have to reset the program to actually see the bookmarks, it isnt sending back the updated stuff
+                        if (currentSong){
+                            $.post(window.location.href,
+                                {
+                                    id: "addBookmark",
+                                    song: currentSong.name,
+                                    section: currentSong.parentElement.parentElement.firstChild.innerHTML, // i know i know but it works
+                                    playlist: playlist,
+                                    bmtime: currentSong.currentTime
+                                }
+                            )
+                        }
+                        break;
+                    case "l":
+                        if (currentSong){
+                            toggleLoop(currentSong)
+                        }
+                        
+                }
+            })
+        </script>
+
+    </head>
+    <body onload="load()">
+        <table width="90%" style="margin: auto" id="postTable">
+            <tr>
+                <td colspan="5">
+                    <form method="POST"> <!-- might need to make this into a query thing-->
+                        <p>Add Song</p>
+                        <input style="display: none" name='id' value="addSong">
+                        <input placeholder="YouTube URL" name="url">
+                        <input placeholder="Song Name" name="song">
+                        <input placeholder="Start" name="start">
+                        <input placeholder="End" name="end">
+                        <input id="fade" name="fade" placeholder="Fade Out (number of seconds)"></input>
+                        <select placeholder="playlist" name="playlist">
+                            {%for playlist in files%}
+                                <option value={{playlist}}>{{playlist}}</option>
+                            {%endfor%}
+                        </select>
+                        <button type="submit" name="btn">Submit</button>
+                    </form>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <form method="POST"> 
+                        <p>Clip Audio</p>
+                        <input style="display: none" name='id' value="cropAudio">
+                        <select name="songSelector">
+                        </select>
+                        <input placeholder="Start" name="start">
+                        <input placeholder="End" name="end">
+                        <input placeholder="Name of Clip" name="name">
+                        <button type="submit" name="btn">Submit</button>
+                    </form>
+                </td>
+                <td>
+                    <form method="POST"> 
+                        <p>Speed Audio</p>
+                        <input style="display: none" name='id' value="speedSong">
+                        <select name="songSelector">
+                        </select>
+                        <input placeholder="Speed" name="speed">
+                        <button type="submit" name="btn">Submit</button>
+                    </form>
+                </td>
+            </tr>
+            <tr>
+                <td colspan="2">
+                    <form method="POST">
+                        <p>Delete Playlist</p>
+                        <input style="display: none" name='id' value="deletePlaylist">
+                        <select placeholder="playlist" name="playlist">
+                            {%for playlist in files%}
+                                <option value ={{playlist}}>{{playlist}}</option>
+                            {%endfor%}
+                        </select>
+                        <button type="submit" name="btn">Submit</button>
+                    </form>
+                </td>
+                <td>
+                    <form method="POST">
+                        <p>Add Playlist</p>
+                        <input style="display: none" name='id' value="addPlaylist">
+                        <input name='name' placeholder="playlist name">
+                        <button type="submit" name="btn">Submit</button>
+                    </form>
+                </td>
+            </tr>
+            <tr>
+                <td>
+                    <button class="center" style="background-color: red;" id="0" name="randomButton" onclick="toggleRandom(this)">Shuffle</button>
+                </td>
+                <td id="playlistSelector" class="center">
+                    <p>Playlist</p>
+                </td>
+                <td>
+                    <form method="POST">
+                        <input style="display: none" name='id' value="resetJSON">
+                        <button type="submit">Reset JSON Data</button>
+                    </form>
+                </td>
+            </tr>
+        </table>
+        <br><br><br>
+        <hr>
+        <br><br><br>
+    </body>
+</html>

@@ -1,0 +1,28 @@
+p, audio, h1{
+    padding-left: 10px;
+    padding-right: 10px;
+}
+
+.selection:hover{
+    border: 1px solid black;
+    cursor: pointer;
+}
+
+.selection{
+    padding: 10px
+}
+
+audio{
+    width: 100%;
+}
+
+table, td{
+    border: 1px solid black;
+    border-collapse: collapse;
+    text-align: center;
+    padding: 10px;
+}
+
+button, input, select, audio{
+    padding:10px;
+}
